@@ -24,10 +24,13 @@ module.exports.createCard = (req, res) => {
 };
 module.exports.deleteCard = (req, res) => {
   Card.findByIdAndRemove(req.params.cardId)
+    .orFail()
     .then(() => res.send({ message: 'Карточка удалена' }))
     .catch((err) => {
-      if (err.name === 'CastError') {
+      if (err.name === 'DocumentNotFoundError') {
         res.status(ERROR_NOT_FOUND).send({ message: 'Запрашиваемая карточка не найдена' });
+      } else if (err.name === 'CastError') {
+        res.status(ERROR_BAD_REQUEST).send({ message: 'Неверный запрос. Запрашиваемая карточка не найдена' });
       } else {
         res.status(ERROR_INTERAL_SERVER).send({ message: 'На сервере произошла ошибка' });
       }
@@ -39,10 +42,13 @@ module.exports.likeCard = (req, res) => {
     { $addToSet: { likes: req.user._id } },
     { new: true, runValidators: true },
   )
+    .orFail()
     .then((card) => res.send({ data: card }))
     .catch((err) => {
-      if (err.name === 'CastError') {
+      if (err.name === 'DocumentNotFoundError') {
         res.status(ERROR_NOT_FOUND).send({ message: 'Запрашиваемая карточка не найдена' });
+      } else if (err.name === 'CastError') {
+        res.status(ERROR_BAD_REQUEST).send({ message: 'Неверный запрос. Запрашиваемая карточка не найдена' });
       } else {
         res.status(ERROR_INTERAL_SERVER).send({ message: 'На сервере произошла ошибка' });
       }
@@ -54,10 +60,13 @@ module.exports.dislikeCard = (req, res) => {
     { $pull: { likes: req.user._id } },
     { new: true, runValidators: true },
   )
+    .orFail()
     .then((card) => res.send({ data: card }))
     .catch((err) => {
-      if (err.name === 'CastError') {
+      if (err.name === 'DocumentNotFoundError') {
         res.status(ERROR_NOT_FOUND).send({ message: 'Запрашиваемая карточка не найдена' });
+      } else if (err.name === 'CastError') {
+        res.status(ERROR_BAD_REQUEST).send({ message: 'Неверный запрос. Запрашиваемая карточка не найдена' });
       } else {
         res.status(ERROR_INTERAL_SERVER).send({ message: 'На сервере произошла ошибка' });
       }

@@ -11,11 +11,13 @@ module.exports.getUsers = (req, res) => {
     .catch(() => res.status(ERROR_INTERAL_SERVER).send({ message: 'На сервере произошла ошибка' }));
 };
 module.exports.getUser = (req, res) => {
-  User.findById(req.params.userId)
+  User.findById(req.params.userId).orFail()
     .then((user) => res.send({ data: user }))
     .catch((err) => {
-      if (err.name === 'CastError') {
+      if (err.name === 'DocumentNotFoundError') {
         res.status(ERROR_NOT_FOUND).send({ message: 'Запрашиваемый пользователь не найден' });
+      } else if (err.name === 'CastError') {
+        res.status(ERROR_BAD_REQUEST).send({ message: 'Неверный запрос. Запрашиваемый пользователь не найден' });
       } else {
         res.status(ERROR_INTERAL_SERVER).send({ message: 'На сервере произошла ошибка' });
       }
