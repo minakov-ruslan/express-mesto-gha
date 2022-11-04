@@ -1,65 +1,103 @@
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const User = require('../models/user');
-const {
-  ERROR_BAD_REQUEST,
-  ERROR_NOT_FOUND,
-  ERROR_INTERAL_SERVER,
-} = require('../utils/errors');
+const { SecretKey } = require('../utils/constants');
+const BadRequestError = require('../utils/errors/BadRequestError');
+const NotFoundError = require('../utils/errors/NotFoundError');
+const ConflictError = require('../utils/errors/ConflictError');
 
-module.exports.getUsers = (req, res) => {
+module.exports.getUsers = (req, res, next) => {
   User.find({})
     .then((users) => res.send({ data: users }))
-    .catch(() => res.status(ERROR_INTERAL_SERVER).send({ message: 'На сервере произошла ошибка' }));
+    .catch(next);
 };
-module.exports.getUser = (req, res) => {
+module.exports.getUser = (req, res, next) => {
   User.findById(req.params.userId).orFail()
     .then((user) => res.send({ data: user }))
     .catch((err) => {
       if (err.name === 'DocumentNotFoundError') {
-        res.status(ERROR_NOT_FOUND).send({ message: 'Запрашиваемый пользователь не найден' });
-      } else if (err.name === 'CastError') {
-        res.status(ERROR_BAD_REQUEST).send({ message: 'Неверный запрос. Запрашиваемый пользователь не найден' });
-      } else {
-        res.status(ERROR_INTERAL_SERVER).send({ message: 'На сервере произошла ошибка' });
+        return next(new NotFoundError('Запрашиваемый пользователь не найден'));
       }
+      if (err.name === 'CastError') {
+        return next(new BadRequestError('Неверный запрос. Запрашиваемый пользователь не найден'));
+      }
+      return next(err);
     });
 };
-module.exports.createUser = (req, res) => {
-  const { name, about, avatar } = req.body;
-  User.create({ name, about, avatar })
+module.exports.createUser = (req, res, next) => {
+  const {
+    name,
+    about,
+    avatar,
+    email,
+    password,
+  } = req.body;
+  bcrypt.hash(password, 10)
+    .then((hash) => User.create({
+      name,
+      about,
+      avatar,
+      email,
+      password: hash,
+    }))
     .then((user) => res.send({ data: user }))
     .catch((err) => {
-      if (err.name === 'ValidationError') {
-        res.status(ERROR_BAD_REQUEST).send({ message: 'Ошибка валидации' });
-      } else {
-        res.status(ERROR_INTERAL_SERVER).send({ message: 'На сервере произошла ошибка' });
+      if (err.code === 11000) {
+        return next(new ConflictError('Пользователь с даным email уже зарегистрирован'));
       }
+      if (err.name === 'ValidationError') {
+        return next(new BadRequestError('Ошибка валидации'));
+      }
+      return next(err);
     });
 };
-module.exports.updateUserInfo = (req, res) => {
+module.exports.updateUserInfo = (req, res, next) => {
   const { name, about } = req.body;
   User.findByIdAndUpdate(req.user._id, { name, about }, { new: true, runValidators: true })
     .then((user) => res.send({ data: user }))
     .catch((err) => {
       if (err.name === 'CastError') {
-        res.status(ERROR_NOT_FOUND).send({ message: 'Запрашиваемый пользователь не найден' });
-      } else if (err.name === 'ValidationError') {
-        res.status(ERROR_BAD_REQUEST).send({ message: 'Ошибка валидации' });
-      } else {
-        res.status(ERROR_INTERAL_SERVER).send({ message: 'На сервере произошла ошибка' });
+        return next(new NotFoundError('Запрашиваемый пользователь не найден'));
       }
+      if (err.name === 'ValidationError') {
+        return next(new BadRequestError('Ошибка валидации'));
+      }
+      return next(err);
     });
 };
-module.exports.updateUserAvatar = (req, res) => {
+module.exports.updateUserAvatar = (req, res, next) => {
   const { avatar } = req.body;
   User.findByIdAndUpdate(req.user._id, { avatar }, { new: true, runValidators: true })
     .then((user) => res.send({ data: user }))
     .catch((err) => {
       if (err.name === 'CastError') {
-        res.status(ERROR_NOT_FOUND).send({ message: 'Запрашиваемый пользователь не найден' });
-      } else if (err.name === 'ValidationError') {
-        res.status(ERROR_BAD_REQUEST).send({ message: 'Ошибка валидации' });
-      } else {
-        res.status(ERROR_INTERAL_SERVER).send({ message: 'На сервере произошла ошибка' });
+        return next(new NotFoundError('Запрашиваемый пользователь не найден'));
       }
+      if (err.name === 'ValidationError') {
+        return next(new BadRequestError('Ошибка валидации'));
+      }
+      return next(err);
+    });
+};
+module.exports.login = (req, res, next) => {
+  const { email, password } = req.body;
+  return User.findUserByCredentials(email, password)
+    .then((user) => {
+      const token = jwt.sign({ _id: user._id }, SecretKey, { expiresIn: '7d' });
+      res.send({ token });
+    })
+    .catch(next);
+};
+module.exports.getCurrentUser = (req, res, next) => {
+  User.findById(req.user._id).orFail()
+    .then((user) => res.send({ data: user }))
+    .catch((err) => {
+      if (err.name === 'DocumentNotFoundError') {
+        return next(new NotFoundError('Запрашиваемый пользователь не найден'));
+      }
+      if (err.name === 'CastError') {
+        return next(new BadRequestError('Неверный запрос. Запрашиваемый пользователь не найден'));
+      }
+      return next(err);
     });
 };
